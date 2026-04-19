@@ -1,16 +1,31 @@
+# Python
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
+
+# Virtual env
 .venv/
 venv/
 env/
-.git/
-.env
+
+# OS / IDE
 .DS_Store
-.idea/
 .vscode/
+.idea/
+
+# Logs
 *.log
-node_modules/
+
+# Secrets
+.env
+*service-account*.json
+secrets/
+
+# Temporary / test files
+request.json
+response*.txt
+
+# Build artifacts
 dist/
 build/
