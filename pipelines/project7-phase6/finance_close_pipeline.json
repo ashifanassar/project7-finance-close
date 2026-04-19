@@ -1,0 +1,332 @@
+{
+  "components": {
+    "comp-finalize-run-component": {
+      "executorLabel": "exec-finalize-run-component",
+      "inputDefinitions": {
+        "parameters": {
+          "final_status": {
+            "parameterType": "STRING"
+          },
+          "notes": {
+            "parameterType": "STRING"
+          },
+          "period": {
+            "parameterType": "STRING"
+          },
+          "project_id": {
+            "parameterType": "STRING"
+          },
+          "run_id": {
+            "parameterType": "STRING"
+          },
+          "run_type": {
+            "parameterType": "STRING"
+          },
+          "table_id": {
+            "parameterType": "STRING"
+          },
+          "triggered_by": {
+            "parameterType": "STRING"
+          }
+        }
+      },
+      "outputDefinitions": {
+        "parameters": {
+          "Output": {
+            "parameterType": "STRING"
+          }
+        }
+      }
+    },
+    "comp-init-run-component": {
+      "executorLabel": "exec-init-run-component",
+      "inputDefinitions": {
+        "parameters": {
+          "period": {
+            "parameterType": "STRING"
+          },
+          "project_id": {
+            "parameterType": "STRING"
+          },
+          "run_id": {
+            "parameterType": "STRING"
+          },
+          "run_type": {
+            "parameterType": "STRING"
+          },
+          "table_id": {
+            "parameterType": "STRING"
+          },
+          "triggered_by": {
+            "parameterType": "STRING"
+          }
+        }
+      },
+      "outputDefinitions": {
+        "parameters": {
+          "Output": {
+            "parameterType": "STRING"
+          }
+        }
+      }
+    },
+    "comp-invoke-router-component": {
+      "executorLabel": "exec-invoke-router-component",
+      "inputDefinitions": {
+        "parameters": {
+          "period": {
+            "parameterType": "STRING"
+          },
+          "router_url": {
+            "parameterType": "STRING"
+          },
+          "run_id": {
+            "parameterType": "STRING"
+          },
+          "run_type": {
+            "parameterType": "STRING"
+          },
+          "triggered_by": {
+            "parameterType": "STRING"
+          }
+        }
+      },
+      "outputDefinitions": {
+        "parameters": {
+          "Output": {
+            "parameterType": "STRING"
+          }
+        }
+      }
+    }
+  },
+  "deploymentSpec": {
+    "executors": {
+      "exec-finalize-run-component": {
+        "container": {
+          "args": [
+            "--executor_input",
+            "{{$}}",
+            "--function_to_execute",
+            "finalize_run_component"
+          ],
+          "command": [
+            "sh",
+            "-c",
+            "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip || python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1 python3 -m pip install --quiet --no-warn-script-location 'kfp==2.7.0' '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"'  &&  python3 -m pip install --quiet --no-warn-script-location 'google-cloud-bigquery==3.25.0' && \"$0\" \"$@\"\n",
+            "sh",
+            "-ec",
+            "program_path=$(mktemp -d)\n\nprintf \"%s\" \"$0\" > \"$program_path/ephemeral_component.py\"\n_KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         \"$program_path/ephemeral_component.py\"                         \"$@\"\n",
+            "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import *\n\ndef finalize_run_component(\n    project_id: str,\n    table_id: str,\n    run_id: str,\n    period: str,\n    run_type: str,\n    triggered_by: str,\n    final_status: str,\n    notes: str,\n) -> str:\n    from datetime import datetime, timezone\n    from google.cloud import bigquery\n\n    client = bigquery.Client(project=project_id)\n    now = datetime.now(timezone.utc).isoformat()\n\n    row = {\n        \"run_id\": run_id,\n        \"period\": period,\n        \"run_type\": run_type,\n        \"status\": final_status,\n        \"started_ts\": now,\n        \"updated_ts\": now,\n        \"triggered_by\": triggered_by,\n        \"notes\": notes,\n    }\n\n    errors = client.insert_rows_json(table_id, [row])\n    print(f\"Finalize insert response: {errors}\")\n\n    if errors:\n        raise RuntimeError(f\"Failed to insert finalize row: {errors}\")\n\n    print(f\"Inserted finalize row: {row}\")\n    return final_status\n\n"
+          ],
+          "image": "python:3.11-slim"
+        }
+      },
+      "exec-init-run-component": {
+        "container": {
+          "args": [
+            "--executor_input",
+            "{{$}}",
+            "--function_to_execute",
+            "init_run_component"
+          ],
+          "command": [
+            "sh",
+            "-c",
+            "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip || python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1 python3 -m pip install --quiet --no-warn-script-location 'kfp==2.7.0' '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"'  &&  python3 -m pip install --quiet --no-warn-script-location 'google-cloud-bigquery==3.25.0' && \"$0\" \"$@\"\n",
+            "sh",
+            "-ec",
+            "program_path=$(mktemp -d)\n\nprintf \"%s\" \"$0\" > \"$program_path/ephemeral_component.py\"\n_KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         \"$program_path/ephemeral_component.py\"                         \"$@\"\n",
+            "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import *\n\ndef init_run_component(\n    project_id: str,\n    table_id: str,\n    run_id: str,\n    period: str,\n    run_type: str,\n    triggered_by: str,\n) -> str:\n    from datetime import datetime, timezone\n    from google.cloud import bigquery\n\n    client = bigquery.Client(project=project_id)\n    now = datetime.now(timezone.utc).isoformat()\n\n    row = {\n        \"run_id\": run_id,\n        \"period\": period,\n        \"run_type\": run_type,\n        \"status\": \"STARTED\",\n        \"started_ts\": now,\n        \"updated_ts\": now,\n        \"triggered_by\": triggered_by,\n        \"notes\": \"Run initialized by Vertex AI Pipeline\",\n    }\n\n    errors = client.insert_rows_json(table_id, [row])\n    if errors:\n        raise RuntimeError(f\"Failed to insert run control row: {errors}\")\n\n    print(f\"Inserted run control row: {row}\")\n    return run_id\n\n"
+          ],
+          "image": "python:3.11-slim"
+        }
+      },
+      "exec-invoke-router-component": {
+        "container": {
+          "args": [
+            "--executor_input",
+            "{{$}}",
+            "--function_to_execute",
+            "invoke_router_component"
+          ],
+          "command": [
+            "sh",
+            "-c",
+            "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip || python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1 python3 -m pip install --quiet --no-warn-script-location 'kfp==2.7.0' '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"'  &&  python3 -m pip install --quiet --no-warn-script-location 'requests' && \"$0\" \"$@\"\n",
+            "sh",
+            "-ec",
+            "program_path=$(mktemp -d)\n\nprintf \"%s\" \"$0\" > \"$program_path/ephemeral_component.py\"\n_KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         \"$program_path/ephemeral_component.py\"                         \"$@\"\n",
+            "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import *\n\ndef invoke_router_component(\n    router_url: str,\n    run_id: str,\n    period: str,\n    run_type: str,\n    triggered_by: str,\n) -> str:\n    import requests\n\n    payload = {\n        \"run_id\": run_id,\n        \"period\": period,\n        \"run_type\": run_type,\n        \"created_by\": triggered_by,\n        \"trigger_mode\": \"vertex_pipeline\"\n    }\n\n    print(f\"Calling Router: {router_url}\")\n    print(f\"Payload: {payload}\")\n\n    response = requests.post(router_url, json=payload, timeout=60)\n\n    if response.status_code != 200:\n        raise RuntimeError(f\"Router call failed: {response.status_code} {response.text}\")\n\n    print(f\"Router triggered successfully: {response.text}\")\n    return response.text\n\n"
+          ],
+          "image": "python:3.11-slim"
+        }
+      }
+    }
+  },
+  "pipelineInfo": {
+    "name": "finance-close-e2e-pipeline"
+  },
+  "root": {
+    "dag": {
+      "tasks": {
+        "finalize-run-component": {
+          "cachingOptions": {},
+          "componentRef": {
+            "name": "comp-finalize-run-component"
+          },
+          "dependentTasks": [
+            "init-run-component",
+            "invoke-router-component"
+          ],
+          "inputs": {
+            "parameters": {
+              "final_status": {
+                "runtimeValue": {
+                  "constant": "AWAITING_APPROVAL"
+                }
+              },
+              "notes": {
+                "runtimeValue": {
+                  "constant": "Router triggered successfully; waiting for Slack approval"
+                }
+              },
+              "period": {
+                "componentInputParameter": "period"
+              },
+              "project_id": {
+                "componentInputParameter": "project_id"
+              },
+              "run_id": {
+                "taskOutputParameter": {
+                  "outputParameterKey": "Output",
+                  "producerTask": "init-run-component"
+                }
+              },
+              "run_type": {
+                "componentInputParameter": "run_type"
+              },
+              "table_id": {
+                "componentInputParameter": "run_control_table"
+              },
+              "triggered_by": {
+                "componentInputParameter": "triggered_by"
+              }
+            }
+          },
+          "taskInfo": {
+            "name": "finalize-run-component"
+          }
+        },
+        "init-run-component": {
+          "cachingOptions": {
+            "enableCache": true
+          },
+          "componentRef": {
+            "name": "comp-init-run-component"
+          },
+          "inputs": {
+            "parameters": {
+              "period": {
+                "componentInputParameter": "period"
+              },
+              "project_id": {
+                "componentInputParameter": "project_id"
+              },
+              "run_id": {
+                "componentInputParameter": "run_id"
+              },
+              "run_type": {
+                "componentInputParameter": "run_type"
+              },
+              "table_id": {
+                "componentInputParameter": "run_control_table"
+              },
+              "triggered_by": {
+                "componentInputParameter": "triggered_by"
+              }
+            }
+          },
+          "taskInfo": {
+            "name": "init-run-component"
+          }
+        },
+        "invoke-router-component": {
+          "cachingOptions": {},
+          "componentRef": {
+            "name": "comp-invoke-router-component"
+          },
+          "dependentTasks": [
+            "init-run-component"
+          ],
+          "inputs": {
+            "parameters": {
+              "period": {
+                "componentInputParameter": "period"
+              },
+              "router_url": {
+                "componentInputParameter": "router_url"
+              },
+              "run_id": {
+                "taskOutputParameter": {
+                  "outputParameterKey": "Output",
+                  "producerTask": "init-run-component"
+                }
+              },
+              "run_type": {
+                "componentInputParameter": "run_type"
+              },
+              "triggered_by": {
+                "componentInputParameter": "triggered_by"
+              }
+            }
+          },
+          "taskInfo": {
+            "name": "invoke-router-component"
+          }
+        }
+      }
+    },
+    "inputDefinitions": {
+      "parameters": {
+        "period": {
+          "defaultValue": "2026-04",
+          "isOptional": true,
+          "parameterType": "STRING"
+        },
+        "project_id": {
+          "defaultValue": "project7-492104",
+          "isOptional": true,
+          "parameterType": "STRING"
+        },
+        "router_url": {
+          "defaultValue": "https://finance-close-router-741187623089.us-central1.run.app/start-close-run",
+          "isOptional": true,
+          "parameterType": "STRING"
+        },
+        "run_control_table": {
+          "defaultValue": "project7-492104.finance_audit_dev.close_run_control",
+          "isOptional": true,
+          "parameterType": "STRING"
+        },
+        "run_id": {
+          "defaultValue": "close-2026-04-prod-001",
+          "isOptional": true,
+          "parameterType": "STRING"
+        },
+        "run_type": {
+          "defaultValue": "dry_run",
+          "isOptional": true,
+          "parameterType": "STRING"
+        },
+        "triggered_by": {
+          "defaultValue": "ashifa",
+          "isOptional": true,
+          "parameterType": "STRING"
+        }
+      }
+    }
+  },
+  "schemaVersion": "2.1.0",
+  "sdkVersion": "kfp-2.7.0"
+}
