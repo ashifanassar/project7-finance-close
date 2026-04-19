@@ -1,0 +1,5 @@
+id,bank_account,entity,amount,currency,settlement_date,description,bank_reference,created_at
+BK2001,BA001,US,5000.00,USD,2026-03-31,Customer receipt March,REF1001,2026-03-31 10:30:00 UTC
+BK2002,BA001,US,2000.00,USD,2026-04-01,Vendor refund,REF1002,2026-04-01 09:00:00 UTC
+BK2003,BA002,UK,9500.00,USD,2026-03-31,FX settlement,REF1003,2026-03-31 12:30:00 UTC
+BK2004,BA001,US,5000.00,USD,2026-03-31,Customer receipt March,REF1004,2026-03-31 14:30:00 UTC

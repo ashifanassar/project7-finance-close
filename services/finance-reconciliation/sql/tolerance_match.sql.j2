@@ -1,0 +1,79 @@
+INSERT INTO `{{ project_id }}.finance_core_dev.reconciliation_results`
+(
+  run_id,
+  gl_id,
+  bank_id,
+  match_status,
+  variance_amount,
+  match_rule,
+  reconciled_at
+)
+WITH matched_gl AS (
+  SELECT gl_id
+  FROM `{{ project_id }}.finance_core_dev.reconciliation_results`
+  WHERE run_id = '{{ run_id }}'
+),
+matched_bank AS (
+  SELECT bank_id
+  FROM `{{ project_id }}.finance_core_dev.reconciliation_results`
+  WHERE run_id = '{{ run_id }}'
+),
+gl_candidates AS (
+  SELECT *
+  FROM `{{ project_id }}.finance_core_dev.gl_transactions` g
+  WHERE booking_date BETWEEN DATE('{{ start_date }}') AND DATE('{{ end_date }}')
+    AND NOT EXISTS (
+      SELECT 1
+      FROM matched_gl m
+      WHERE m.gl_id = g.id
+    )
+),
+bank_candidates AS (
+  SELECT *
+  FROM `{{ project_id }}.finance_core_dev.bank_feeds` b
+  WHERE (
+        settlement_date BETWEEN DATE('{{ start_date }}') AND DATE('{{ end_date }}')
+     OR settlement_date BETWEEN DATE('{{ start_date }}') AND DATE_ADD(DATE('{{ end_date }}'), INTERVAL 3 DAY)
+  )
+    AND NOT EXISTS (
+      SELECT 1
+      FROM matched_bank m
+      WHERE m.bank_id = b.id
+    )
+),
+candidate_pairs AS (
+  SELECT
+    '{{ run_id }}' AS run_id,
+    g.id AS gl_id,
+    b.id AS bank_id,
+    'PARTIAL' AS match_status,
+    CAST(ABS(g.amount - b.amount) AS NUMERIC) AS variance_amount,
+    'tolerance_amount_match' AS match_rule,
+    CURRENT_TIMESTAMP() AS reconciled_at,
+    ROW_NUMBER() OVER (
+      PARTITION BY g.id
+      ORDER BY ABS(g.amount - b.amount), ABS(DATE_DIFF(b.settlement_date, g.booking_date, DAY)), b.id
+    ) AS gl_rank,
+    ROW_NUMBER() OVER (
+      PARTITION BY b.id
+      ORDER BY ABS(g.amount - b.amount), ABS(DATE_DIFF(b.settlement_date, g.booking_date, DAY)), g.id
+    ) AS bank_rank
+  FROM gl_candidates g
+  JOIN bank_candidates b
+    ON g.entity = b.entity
+   AND g.currency = b.currency
+   AND LOWER(TRIM(g.description)) = LOWER(TRIM(b.description))
+   AND ABS(g.amount - b.amount) <= {{ amount_tolerance }}
+   AND ABS(DATE_DIFF(b.settlement_date, g.booking_date, DAY)) <= 3
+)
+SELECT
+  run_id,
+  gl_id,
+  bank_id,
+  match_status,
+  variance_amount,
+  match_rule,
+  reconciled_at
+FROM candidate_pairs
+WHERE gl_rank = 1
+  AND bank_rank = 1;

@@ -1,0 +1,82 @@
+INSERT INTO `{{ project_id }}.finance_core_dev.month_end_exceptions`
+(
+  run_id,
+  exception_id,
+  gl_id,
+  bank_id,
+  variance_amount,
+  exception_type,
+  agent_explanation,
+  confidence_score,
+  reviewer_id,
+  status,
+  created_at
+)
+WITH matched_gl AS (
+  SELECT gl_id
+  FROM `{{ project_id }}.finance_core_dev.reconciliation_results`
+  WHERE run_id = '{{ run_id }}'
+),
+matched_bank AS (
+  SELECT bank_id
+  FROM `{{ project_id }}.finance_core_dev.reconciliation_results`
+  WHERE run_id = '{{ run_id }}'
+),
+unmatched_gl AS (
+  SELECT
+    g.id AS gl_id,
+    g.amount,
+    'GL_UNMATCHED' AS exception_type
+  FROM `{{ project_id }}.finance_core_dev.gl_transactions` g
+  WHERE g.booking_date BETWEEN DATE('{{ start_date }}') AND DATE('{{ end_date }}')
+    AND NOT EXISTS (
+      SELECT 1
+      FROM matched_gl m
+      WHERE m.gl_id = g.id
+    )
+),
+unmatched_bank AS (
+  SELECT
+    b.id AS bank_id,
+    b.amount,
+    'BANK_UNMATCHED' AS exception_type
+  FROM `{{ project_id }}.finance_core_dev.bank_feeds` b
+  WHERE (
+        b.settlement_date BETWEEN DATE('{{ start_date }}') AND DATE('{{ end_date }}')
+     OR b.settlement_date BETWEEN DATE('{{ start_date }}') AND DATE_ADD(DATE('{{ end_date }}'), INTERVAL 3 DAY)
+  )
+    AND NOT EXISTS (
+      SELECT 1
+      FROM matched_bank m
+      WHERE m.bank_id = b.id
+    )
+)
+SELECT
+  '{{ run_id }}' AS run_id,
+  CONCAT('EXC-', GENERATE_UUID()) AS exception_id,
+  gl_id,
+  NULL AS bank_id,
+  amount AS variance_amount,
+  exception_type,
+  'Pending variance analysis' AS agent_explanation,
+  NULL AS confidence_score,
+  NULL AS reviewer_id,
+  'OPEN' AS status,
+  CURRENT_TIMESTAMP() AS created_at
+FROM unmatched_gl
+
+UNION ALL
+
+SELECT
+  '{{ run_id }}' AS run_id,
+  CONCAT('EXC-', GENERATE_UUID()) AS exception_id,
+  NULL AS gl_id,
+  bank_id,
+  amount AS variance_amount,
+  exception_type,
+  'Pending variance analysis' AS agent_explanation,
+  NULL AS confidence_score,
+  NULL AS reviewer_id,
+  'OPEN' AS status,
+  CURRENT_TIMESTAMP() AS created_at
+FROM unmatched_bank;
